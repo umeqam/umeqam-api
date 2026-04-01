@@ -208,8 +208,9 @@ def _load_api_keys() -> dict:
     # Fallback для локальной разработки — WARNING в логах
     print("WARNING: UMEQAM_API_KEYS not set — using dev fallback. Set in production!")
     return {
-        "umeqam-dev-key-001": "developer",
-        "umeqam-demo-key-002": "demo",
+        "umeqam-admin-secret-2026": "admin",
+        "umeqam-dev-key-001":       "dev",
+        "umeqam-demo-key-002":      "demo",
     }
 
 API_KEYS = _load_api_keys()
