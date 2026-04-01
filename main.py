@@ -779,6 +779,47 @@ async def quota(request: Request):
         "upgrade": "legal@umeqam.com"
     }
 
+@app.post("/admin/create-key", tags=["Admin"])
+async def create_key(request: Request):
+    admin_key = request.headers.get("X-API-Key", "")
+    keys = _load_api_keys()
+    if keys.get(admin_key) != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    body = await request.json()
+    client_name = body.get("client_name", "client")
+    role = body.get("role", "starter")
+    import secrets
+    new_key = f"umeqam-{role}-{secrets.token_hex(8)}"
+    existing = json.loads(os.getenv("UMEQAM_API_KEYS", "{}"))
+    existing[new_key] = role
+    return {
+        "api_key": new_key,
+        "client_name": client_name,
+        "role": role,
+        "quota": QUOTA_LIMITS.get(role, 10000),
+        "price": QUOTA_PRICES.get(role, "custom"),
+        "note": f"Add to UMEQAM_API_KEYS env var: {new_key}:{role}"
+    }
+
+@app.get("/admin/keys", tags=["Admin"])
+async def list_keys(request: Request):
+    admin_key = request.headers.get("X-API-Key", "")
+    keys = _load_api_keys()
+    if keys.get(admin_key) != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    result = {}
+    for k, v in keys.items():
+        with _quota_lock:
+            entry = _usage_counters.get(k, {"count": 0, "month": "-"})
+            limit = _get_quota_limit(k)
+        result[k[:16] + "..."] = {
+            "role": v,
+            "requests_used": entry["count"],
+            "requests_limit": limit,
+            "requests_remaining": max(0, limit - entry["count"])
+        }
+    return result
+
 # ── RUN ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
