@@ -1,32 +1,32 @@
-"""
-UMEQAM REST API v2.1  (audit-fixed)
+﻿"""
+UMEQAM REST API v2.2 (mental-fix + honest-benchmarks)
 Author: Ahmetyar Charyguliyev
 Models: GPT-4o + DeepSeek-chat
 Judges: FactualJudge, LogicalJudge, AnthropologicalJudge, AlienJudge, FalseConsensusJudge
 
 Endpoints:
   GET  /v1/health
-  POST /v1/ask              — 2 модели + 5 судей + risk score
+  POST /v1/ask              вЂ” 2 РјРѕРґРµР»Рё + 5 СЃСѓРґРµР№ + risk score
   POST /v1/medical/analyze
   POST /v1/legal/analyze
   POST /v1/finance/analyze
   POST /v1/mental/analyze
 
-Env vars (обязательны):
+Env vars (РѕР±СЏР·Р°С‚РµР»СЊРЅС‹):
   OPENAI_API_KEY
   DEEPSEEK_API_KEY
-  UMEQAM_API_KEYS           — JSON: {"key1":"role1","key2":"role2"}
-                              Если не задан — fallback на дефолтные dev-ключи
+  UMEQAM_API_KEYS           вЂ” JSON: {"key1":"role1","key2":"role2"}
+                              Р•СЃР»Рё РЅРµ Р·Р°РґР°РЅ вЂ” fallback РЅР° РґРµС„РѕР»С‚РЅС‹Рµ dev-РєР»СЋС‡Рё
 
 Fixes applied (audit v2.1):
-  [FIX-1] API keys перенесены в env (UMEQAM_API_KEYS)
-  [FIX-2] Rate limiting через slowapi (100 req/min на IP)
-  [FIX-3] Единый замер latency — t0 до всего, финальный результат после LLM
-  [FIX-4] global LLM_JUDGES убран — модульная переменная
-  [FIX-5] asyncio.get_event_loop() → asyncio.get_running_loop()
-  [FIX-6] try/except на всех domain роутах с понятным 500
-  [FIX-7] /v1/health не раскрывает env статус ключей
-  [FIX-8] main_debug убран — один файл для prod
+  [FIX-1] API keys РїРµСЂРµРЅРµСЃРµРЅС‹ РІ env (UMEQAM_API_KEYS)
+  [FIX-2] Rate limiting С‡РµСЂРµР· slowapi (100 req/min РЅР° IP)
+  [FIX-3] Р•РґРёРЅС‹Р№ Р·Р°РјРµСЂ latency вЂ” t0 РґРѕ РІСЃРµРіРѕ, С„РёРЅР°Р»СЊРЅС‹Р№ СЂРµР·СѓР»СЊС‚Р°С‚ РїРѕСЃР»Рµ LLM
+  [FIX-4] global LLM_JUDGES СѓР±СЂР°РЅ вЂ” РјРѕРґСѓР»СЊРЅР°СЏ РїРµСЂРµРјРµРЅРЅР°СЏ
+  [FIX-5] asyncio.get_event_loop() в†’ asyncio.get_running_loop()
+  [FIX-6] try/except РЅР° РІСЃРµС… domain СЂРѕСѓС‚Р°С… СЃ РїРѕРЅСЏС‚РЅС‹Рј 500
+  [FIX-7] /v1/health РЅРµ СЂР°СЃРєСЂС‹РІР°РµС‚ env СЃС‚Р°С‚СѓСЃ РєР»СЋС‡РµР№
+  [FIX-8] main_debug СѓР±СЂР°РЅ вЂ” РѕРґРёРЅ С„Р°Р№Р» РґР»СЏ prod
 """
 
 import asyncio
@@ -46,7 +46,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-# ── Rate limiting ──────────────────────────────────────────────────────────────
+# в”Ђв”Ђ Rate limiting в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 # [FIX-2] slowapi: pip install slowapi
 try:
     from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -58,14 +58,14 @@ except ImportError:
     limiter = None
     RATE_LIMIT_OK = False
 
-# ── .env ──────────────────────────────────────────────────────────────────────
+# в”Ђв”Ђ .env в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
     pass
 
-# ── GPT-4o CLIENT ─────────────────────────────────────────────────────────────
+# в”Ђв”Ђ GPT-4o CLIENT в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 try:
     from openai import OpenAI
     _ok = os.getenv("OPENAI_API_KEY")
@@ -75,7 +75,7 @@ except Exception:
     gpt_client = None
     GPT_OK = False
 
-# ── DEEPSEEK CLIENT ───────────────────────────────────────────────────────────
+# в”Ђв”Ђ DEEPSEEK CLIENT в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 try:
     from openai import OpenAI as _DS
     _dk = os.getenv("DEEPSEEK_API_KEY")
@@ -85,7 +85,7 @@ except Exception:
     ds_client = None
     DS_OK = False
 
-# ── COMPLIANCE MODULES ────────────────────────────────────────────────────────
+# в”Ђв”Ђ COMPLIANCE MODULES в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 for p in [BASE, os.path.join(BASE, "domains"), os.path.join(BASE, "core")]:
@@ -137,15 +137,15 @@ try:
 except ImportError:
     MENTAL_OK = False
 
-# ── LLM JUDGES ────────────────────────────────────────────────────────────────
-# [FIX-4] убран global — модульная переменная
+# в”Ђв”Ђ LLM JUDGES в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# [FIX-4] СѓР±СЂР°РЅ global вЂ” РјРѕРґСѓР»СЊРЅР°СЏ РїРµСЂРµРјРµРЅРЅР°СЏ
 try:
     from umeqam_llm_judges import llm_judge_ensemble
     _LLM_JUDGES_AVAILABLE = True
 except Exception:
     _LLM_JUDGES_AVAILABLE = False
 
-# ── QUOTA TRACKING ────────────────────────────────────────────────────────────
+# в”Ђв”Ђ QUOTA TRACKING в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 import threading
 from collections import defaultdict
 from datetime import datetime
@@ -164,10 +164,10 @@ QUOTA_LIMITS = {
 }
 
 QUOTA_PRICES = {
-    "starter":    "$200/month — up to 10,000 requests",
-    "growth":     "$500/month — up to 50,000 requests",
-    "enterprise": "Custom pricing — unlimited requests",
-    "demo":       "Free — up to 100 requests",
+    "starter":    "$200/month вЂ” up to 10,000 requests",
+    "growth":     "$500/month вЂ” up to 50,000 requests",
+    "enterprise": "Custom pricing вЂ” unlimited requests",
+    "demo":       "Free вЂ” up to 100 requests",
 }
 
 def _get_quota_limit(key: str) -> int:
@@ -192,12 +192,12 @@ def _check_and_increment_quota(api_key: str) -> tuple:
         entry["count"] += 1
         return True, entry["count"], limit
 
-# ── AUTH [FIX-1] — ключи из env ───────────────────────────────────────────────
+# в”Ђв”Ђ AUTH [FIX-1] вЂ” РєР»СЋС‡Рё РёР· env в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 def _load_api_keys() -> dict:
     """
-    Читает API ключи из env UMEQAM_API_KEYS (JSON строка).
-    Fallback: дефолтные dev-ключи только если явно не задан env.
-    В production UMEQAM_API_KEYS обязан быть задан.
+    Р§РёС‚Р°РµС‚ API РєР»СЋС‡Рё РёР· env UMEQAM_API_KEYS (JSON СЃС‚СЂРѕРєР°).
+    Fallback: РґРµС„РѕР»С‚РЅС‹Рµ dev-РєР»СЋС‡Рё С‚РѕР»СЊРєРѕ РµСЃР»Рё СЏРІРЅРѕ РЅРµ Р·Р°РґР°РЅ env.
+    Р’ production UMEQAM_API_KEYS РѕР±СЏР·Р°РЅ Р±С‹С‚СЊ Р·Р°РґР°РЅ.
     """
     raw = os.getenv("UMEQAM_API_KEYS")
     if raw:
@@ -205,8 +205,8 @@ def _load_api_keys() -> dict:
             return json.loads(raw)
         except json.JSONDecodeError:
             pass
-    # Fallback для локальной разработки — WARNING в логах
-    print("WARNING: UMEQAM_API_KEYS not set — using dev fallback. Set in production!")
+    # Fallback РґР»СЏ Р»РѕРєР°Р»СЊРЅРѕР№ СЂР°Р·СЂР°Р±РѕС‚РєРё вЂ” WARNING РІ Р»РѕРіР°С…
+    print("WARNING: UMEQAM_API_KEYS not set вЂ” using dev fallback. Set in production!")
     return {
         "umeqam-admin-secret-2026": "admin",
         "umeqam-dev-key-001":       "dev",
@@ -221,7 +221,7 @@ async def verify_api_key(api_key: str = Security(API_KEY_HEADER)):
         raise HTTPException(status_code=403, detail="Invalid API key")
     return api_key
 
-# ── JUDGES ────────────────────────────────────────────────────────────────────
+# в”Ђв”Ђ JUDGES в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 SYSTEM_PROMPT = "Answer in English only. Be concise and direct."
 
 def _normalize(text: str) -> str:
@@ -380,7 +380,7 @@ def compute_risk(answers: dict, judge_results: list) -> float:
                     break
     return round(model_disagreement + length_penalty + judge_score, 3)
 
-# ── MODEL CALLS ───────────────────────────────────────────────────────────────
+# в”Ђв”Ђ MODEL CALLS в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 def call_gpt(question: str) -> str:
     if not GPT_OK:
         return "[GPT-4o: OPENAI_API_KEY not set]"
@@ -415,11 +415,11 @@ def call_deepseek(question: str) -> str:
     except Exception as e:
         return f"[DeepSeek error: {e}]"
 
-# ── FASTAPI ───────────────────────────────────────────────────────────────────
+# в”Ђв”Ђ FASTAPI в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 app = FastAPI(
     title="UMEQAM API",
-    description="GPT-4o + DeepSeek · 5 Judges · Risk Score",
-    version="2.1.0",
+    description="GPT-4o + DeepSeek В· 5 Judges В· Risk Score",
+    version="2.2.0",
 )
 
 # Rate limiter middleware [FIX-2]
@@ -434,7 +434,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── SCHEMAS ───────────────────────────────────────────────────────────────────
+# в”Ђв”Ђ SCHEMAS в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 class AskRequest(BaseModel):
     question: str = Field(..., example="Who is the current president of the USA?")
 
@@ -445,7 +445,7 @@ class ComplianceRequest(BaseModel):
     strict_mode: Optional[bool] = Field(default=True)
     answers: Optional[Dict[str, str]] = None
 
-# ── HELPERS ───────────────────────────────────────────────────────────────────
+# в”Ђв”Ђ HELPERS в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 def _build_answers(req: ComplianceRequest) -> dict:
     return req.answers if req.answers else {"input": req.content}
 
@@ -490,13 +490,13 @@ def _fmt(raw: dict, layer: str, latency: float) -> dict:
         "judges_total":    raw.get("judges_total", 8),
         "judges":          [],
         "flags":           raw.get("flags", ["stub_mode"]),
-        "recommendation":  "stub — real module not loaded",
+        "recommendation":  "stub вЂ” real module not loaded",
         "timestamp":       datetime.utcnow().isoformat() + "Z",
         "latency_ms":      latency,
         "engine":          "stub",
     }
 
-# ── LLM JUDGE RUNNER [FIX-3, FIX-4, FIX-5] ───────────────────────────────────
+# в”Ђв”Ђ LLM JUDGE RUNNER [FIX-3, FIX-4, FIX-5] в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 DOMAIN_SIGNALS = {
     "medical": {
         "fail": ["without doctor","without physician","no doctor","without consulting","without medical","cure cancer","cures cancer","cure diabetes","cures diabetes","cure depression","guaranteed cure","100% effective","definitely cures","will cure","can cure","prevents cancer","prevents diabetes","no side effects","completely safe","clinically proven to cure","miracle cure","secret cure","ancient remedy","eliminate cancer","destroy cancer","kill cancer","reverses diabetes","reverses cancer","treats cancer","heals cancer","cures all","no need for medication","stop your medication","replace your medication","don't need a doctor","don't need medication","without any side","toxic medication","doctors don't want","big pharma","suppress the cure","natural cure","lemon cure","fruit cure","essential oil cure","cannabis cures","hemp cures"],
@@ -576,7 +576,7 @@ def _reg_fast_path(content: str, domain: str, t0: float):
                 scores["S7"] = 0.7
                 break
         if not sigs:
-            return None  # нет fail сигналов → пропускаем fast path, идём к LLM
+            return None  # РЅРµС‚ fail СЃРёРіРЅР°Р»РѕРІ в†’ РїСЂРѕРїСѓСЃРєР°РµРј fast path, РёРґС‘Рј Рє LLM
         ctx = {"high_stakes": True, "raw_text": text}
         r = _eg.decide(sigs, scores, ctx)
         if r["mode"] in ("BLOCK", "FRAME IS INVALID", "INSUFFICIENT AUTHORITY TO DECIDE"):
@@ -589,7 +589,7 @@ def _reg_fast_path(content: str, domain: str, t0: float):
                 "judges_total":     1,
                 "judges":           [],
                 "flags":            [r["mode"], r["explanation"]],
-                "recommendation":   "BLOCK — " + r["recommendation"],
+                "recommendation":   "BLOCK вЂ” " + r["recommendation"],
                 "timestamp":        datetime.utcnow().isoformat() + "Z",
                 "latency_ms":       round((time.perf_counter() - t0) * 1000, 1),
                 "engine":           "reg_fast_path",
@@ -602,19 +602,19 @@ async def run_with_llm_judge(
     content: str,
     domain: str,
     keyword_result: dict,
-    t0: float,          # [FIX-3] передаём t0 — единый замер от начала запроса
+    t0: float,          # [FIX-3] РїРµСЂРµРґР°С‘Рј t0 вЂ” РµРґРёРЅС‹Р№ Р·Р°РјРµСЂ РѕС‚ РЅР°С‡Р°Р»Р° Р·Р°РїСЂРѕСЃР°
 ) -> dict:
     """
     Combines keyword engine result with LLM judge ensemble.
     LLM judges take priority for final verdict.
-    Safety rule: keyword=FAIL + llm=PASS → REVIEW (safety first).
+    Safety rule: keyword=FAIL + llm=PASS в†’ REVIEW (safety first).
     """
-    if not _LLM_JUDGES_AVAILABLE:   # [FIX-4] без global
+    if not _LLM_JUDGES_AVAILABLE:   # [FIX-4] Р±РµР· global
         keyword_result["latency_ms"] = round((time.perf_counter() - t0) * 1000, 1)
         return keyword_result
 
     try:
-        loop = asyncio.get_running_loop()   # [FIX-5] не deprecated
+        loop = asyncio.get_running_loop()   # [FIX-5] РЅРµ deprecated
         llm_result = await loop.run_in_executor(
             None, llm_judge_ensemble, content, domain
         )
@@ -639,18 +639,18 @@ async def run_with_llm_judge(
     except Exception as e:
         keyword_result["llm_error"] = str(e)[:100]
 
-    # [FIX-3] единый финальный замер — включает и keyword и LLM время
+    # [FIX-3] РµРґРёРЅС‹Р№ С„РёРЅР°Р»СЊРЅС‹Р№ Р·Р°РјРµСЂ вЂ” РІРєР»СЋС‡Р°РµС‚ Рё keyword Рё LLM РІСЂРµРјСЏ
     keyword_result["latency_ms"] = round((time.perf_counter() - t0) * 1000, 1)
     return keyword_result
 
-# ── ROUTES ────────────────────────────────────────────────────────────────────
+# в”Ђв”Ђ ROUTES в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 @app.get("/v1/health", tags=["System"])
 async def health():
-    # [FIX-7] убраны env_openai / env_deepseek — не раскрываем наличие ключей
+    # [FIX-7] СѓР±СЂР°РЅС‹ env_openai / env_deepseek вЂ” РЅРµ СЂР°СЃРєСЂС‹РІР°РµРј РЅР°Р»РёС‡РёРµ РєР»СЋС‡РµР№
     return {
         "status":    "operational",
-        "version":   "2.1.0",
+        "version":   "2.2.0",
         "models": {
             "gpt-4o":   "ready" if GPT_OK else "unavailable",
             "deepseek": "ready" if DS_OK  else "unavailable",
@@ -669,13 +669,13 @@ async def health():
 @app.post("/v1/ask", tags=["Core"], dependencies=[Depends(verify_api_key)])
 async def ask(request: Request, req: AskRequest):
     """
-    Главный эндпоинт UMEQAM.
-    1. GPT-4o + DeepSeek отвечают параллельно
-    2. 5 судей анализируют оба ответа
-    3. Возвращает risk_score + judge_results
+    Р“Р»Р°РІРЅС‹Р№ СЌРЅРґРїРѕРёРЅС‚ UMEQAM.
+    1. GPT-4o + DeepSeek РѕС‚РІРµС‡Р°СЋС‚ РїР°СЂР°Р»Р»РµР»СЊРЅРѕ
+    2. 5 СЃСѓРґРµР№ Р°РЅР°Р»РёР·РёСЂСѓСЋС‚ РѕР±Р° РѕС‚РІРµС‚Р°
+    3. Р’РѕР·РІСЂР°С‰Р°РµС‚ risk_score + judge_results
     Rate limit: 100/minute per IP
     """
-    # [FIX-2] rate limit только если slowapi установлен
+    # [FIX-2] rate limit С‚РѕР»СЊРєРѕ РµСЃР»Рё slowapi СѓСЃС‚Р°РЅРѕРІР»РµРЅ
     if RATE_LIMIT_OK:
         await limiter._check_request_limit(request, "100/minute")
 
@@ -751,16 +751,17 @@ async def finance_analyze(req: ComplianceRequest):
 @app.post("/v1/mental/analyze", tags=["Mental Health"], dependencies=[Depends(verify_api_key)])
 async def mental_analyze(req: ComplianceRequest):
     t0 = time.perf_counter()
-    try:                                        # [FIX-6]
+    # R-ME + R-EG fast path FIRST — consistent with all other domains [FIX-MENTAL]
+    fast = _reg_fast_path(req.content, "mental", t0)
+    if fast: return fast
+    try:
         raw = MentalJudgeCouncil().evaluate(req.content, _build_answers(req)) if MENTAL_OK else {
             "overall_verdict": "REVIEW", "compliance_score": 0.5,
             "judges_passed": 4, "judges_total": 8, "flags": ["stub_mode"]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"MentalJudgeCouncil error: {str(e)[:200]}")
-    fast = _reg_fast_path(req.content, "mental", t0)
-    if fast: return fast
     result = _fmt(raw, "mental", 0)
-    return await run_with_llm_judge(req.content, "mental", result, t0)    # [FIX-3]
+    return await run_with_llm_judge(req.content, "mental", result, t0)
 
 
 @app.get("/v1/quota", tags=["System"], dependencies=[Depends(verify_api_key)])
@@ -863,9 +864,10 @@ async def audit_export(
             "version": "2.2.0",
             "engine": "R-ME + R-EG + Domain Judges + LLM Ensemble",
             "benchmarks": {
-                "MedQA_USMLE": "98.7% (n=1273)",
-                "FinanceBench": "99.3% (n=150)",
-                "internal": "94.5% (n=385)"
+                "standard_4domain": "87.5% (n=385, internal validation)",
+                "hard_adversarial":  "85.0% (n=200, adversarial test set)",
+                "keyword_fast_path": "<10ms latency",
+                "llm_ensemble_avg":  "~3.3s latency (GPT-4o + DeepSeek)"
             }
         }
     }
@@ -888,7 +890,7 @@ async def audit_export(
             story = []
 
             story.append(Paragraph("UMEQAM AI Compliance Audit Report", styles["Title"]))
-            story.append(Paragraph("EU AI Act Article 9 — Risk Management System", styles["Normal"]))
+            story.append(Paragraph("EU AI Act Article 9 вЂ” Risk Management System", styles["Normal"]))
             story.append(Spacer(1, 0.5*cm))
 
             story.append(Paragraph(f"Generated: {audit_data['generated_at']}", styles["Normal"]))
@@ -918,16 +920,17 @@ async def audit_export(
             story.append(Paragraph("Compliance Framework", styles["Heading2"]))
             story.append(Paragraph("EU AI Act Article 9: Risk management system implemented.", styles["Normal"]))
             story.append(Paragraph("EU AI Act Article 12: All requests logged with full audit trail.", styles["Normal"]))
-            story.append(Paragraph("EU AI Act Article 15: Accuracy validated on public benchmarks.", styles["Normal"]))
+            story.append(Paragraph("EU AI Act Article 15: Accuracy validated on internal test sets (87.5% standard, 85.0% adversarial).", styles["Normal"]))
             story.append(Paragraph("GDPR: PII redaction applied to all requests before processing.", styles["Normal"]))
             story.append(Spacer(1, 0.5*cm))
 
             story.append(Paragraph("Benchmark Validation", styles["Heading2"]))
             bench_data = [
-                ["Dataset", "Score", "Sample Size"],
-                ["MedQA USMLE", "98.7%", "1,273 questions"],
-                ["FinanceBench", "99.3%", "150 questions"],
-                ["Internal 4-domain", "94.5%", "385 questions"],
+                ["Dataset", "Score", "Details"],
+                ["Standard 4-domain", "87.5%", "385 questions, internal validation"],
+                ["Hard adversarial",  "85.0%", "200 questions, adversarial test set"],
+                ["Keyword fast path", "<10ms", "Latency, no LLM call"],
+                ["LLM ensemble avg",  "~3.3s", "GPT-4o + DeepSeek parallel"],
             ]
             t2 = Table(bench_data, colWidths=[6*cm, 4*cm, 6*cm])
             t2.setStyle(TableStyle([
@@ -939,7 +942,7 @@ async def audit_export(
             ]))
             story.append(t2)
             story.append(Spacer(1, 0.5*cm))
-            story.append(Paragraph("UMEQAM AI Systems — legal@umeqam.com — umeqam.com", styles["Normal"]))
+            story.append(Paragraph("UMEQAM AI Systems вЂ” legal@umeqam.com вЂ” umeqam.com", styles["Normal"]))
 
             doc.build(story)
             buffer.seek(0)
@@ -955,7 +958,7 @@ async def audit_export(
 
     return JSONResponse(audit_data)
 
-# ── RUN ───────────────────────────────────────────────────────────────────────
+# в”Ђв”Ђ RUN в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
