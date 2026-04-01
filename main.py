@@ -145,6 +145,43 @@ try:
 except Exception:
     _LLM_JUDGES_AVAILABLE = False
 
+# ── QUOTA TRACKING ────────────────────────────────────────────────────────────
+import threading
+from collections import defaultdict
+from datetime import datetime
+
+_quota_lock = threading.Lock()
+_usage_counters = defaultdict(lambda: {"count": 0, "month": datetime.utcnow().strftime("%Y-%m")})
+
+QUOTA_LIMITS = {
+    "admin": 999999,
+    "demo":  100,
+    "dev":   10000,
+    "paid":  10000,
+}
+
+def _get_quota_limit(key: str) -> int:
+    keys = _load_api_keys()
+    role = keys.get(key, "")
+    for k, v in QUOTA_LIMITS.items():
+        if k in role:
+            return v
+    return 10000
+
+def _check_and_increment_quota(api_key: str) -> tuple:
+    """Returns (allowed: bool, current: int, limit: int)"""
+    with _quota_lock:
+        now_month = datetime.utcnow().strftime("%Y-%m")
+        entry = _usage_counters[api_key]
+        if entry["month"] != now_month:
+            entry["count"] = 0
+            entry["month"] = now_month
+        limit = _get_quota_limit(api_key)
+        if entry["count"] >= limit:
+            return False, entry["count"], limit
+        entry["count"] += 1
+        return True, entry["count"], limit
+
 # ── AUTH [FIX-1] — ключи из env ───────────────────────────────────────────────
 def _load_api_keys() -> dict:
     """
@@ -714,6 +751,23 @@ async def mental_analyze(req: ComplianceRequest):
     result = _fmt(raw, "mental", 0)
     return await run_with_llm_judge(req.content, "mental", result, t0)    # [FIX-3]
 
+
+@app.get("/v1/quota", tags=["System"], dependencies=[Depends(verify_api_key)])
+async def quota(request: Request):
+    """Check current monthly usage and limits."""
+    api_key = request.headers.get("X-API-Key", "")
+    with _quota_lock:
+        entry = _usage_counters.get(api_key, {"count": 0, "month": "-"})
+        limit = _get_quota_limit(api_key)
+    return {
+        "api_key_prefix": api_key[:12] + "...",
+        "month": entry["month"],
+        "requests_used": entry["count"],
+        "requests_limit": limit,
+        "requests_remaining": max(0, limit - entry["count"]),
+        "overage_rate": "$0.02 per request",
+        "upgrade": "legal@umeqam.com"
+    }
 
 # ── RUN ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
