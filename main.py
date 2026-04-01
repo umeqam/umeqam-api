@@ -154,10 +154,20 @@ _quota_lock = threading.Lock()
 _usage_counters = defaultdict(lambda: {"count": 0, "month": datetime.utcnow().strftime("%Y-%m")})
 
 QUOTA_LIMITS = {
-    "admin": 999999,
-    "demo":  100,
-    "dev":   10000,
-    "paid":  10000,
+    "admin":      999999,
+    "demo":       100,
+    "dev":        10000,
+    "starter":    10000,
+    "growth":     50000,
+    "enterprise": 999999,
+    "paid":       10000,
+}
+
+QUOTA_PRICES = {
+    "starter":    "$200/month — up to 10,000 requests",
+    "growth":     "$500/month — up to 50,000 requests",
+    "enterprise": "Custom pricing — unlimited requests",
+    "demo":       "Free — up to 100 requests",
 }
 
 def _get_quota_limit(key: str) -> int:
