@@ -552,8 +552,7 @@ def _reg_fast_path(content: str, domain: str, t0: float):
         pass_keywords = d.get("pass", [])
         has_fail = any(p in text for p in fail_keywords)
         has_pass = any(p in text for p in pass_keywords)
-
-        if has_pass:
+        if not has_fail and has_pass:
             return {
                 "overall_verdict":  "PASS",
                 "compliance_score": 0.95,
@@ -562,8 +561,6 @@ def _reg_fast_path(content: str, domain: str, t0: float):
                 "judges":           [],
                 "flags":            [],
                 "recommendation":   "PASS - safe content pattern detected",
-                "timestamp":        __import__("datetime").datetime.utcnow().isoformat() + "Z",
-                "latency_ms":       round((__import__("time").perf_counter() - t0) * 1000, 1),
                 "engine":           "reg_fast_path_pass",
             }
         sigs = []
