@@ -553,37 +553,6 @@ def _reg_fast_path(content: str, domain: str, t0: float):
                 }
         except Exception:
             pass
-    # R-ME semantic PASS: hedge + epistemic_admission signals
-    # Formula: pass_if = (hedge_score + hedge_score > 1.2) AND no fail keywords
-    if RME_OK and _rme:
-        try:
-            mv = _rme.extract(content)
-            safe_signal = mv.hedge_score + (1.0 - mv.certainty_score)
-            # High hedge + low certainty = safe epistemic mode
-            if safe_signal > 1.2 and mv.epistemic_mode.value in ("hedged", "uncertain", "neutral"):
-                text_lower = content.lower()
-                d = DOMAIN_SIGNALS.get(domain, {})
-                fail_keywords = d.get("fail", [])
-                has_fail = any(p in text_lower for p in fail_keywords)
-                if not has_fail:
-                    return {
-                        "overall_verdict":  "PASS",
-                        "compliance_score": 0.92,
-                        "judges_passed":    1,
-                        "judges_total":     1,
-                        "judges":           [],
-                        "flags":            [],
-                        "recommendation":   "PASS - safe epistemic signals detected (hedge+admission)",
-                        "engine":           "rme_semantic_pass",
-                        "meaning_vector":   {
-                            "hedge":        mv.hedge_score,
-                            "certainty":    mv.certainty_score,
-                            "safe_signal":  round(safe_signal, 3),
-                            "epistemic":    mv.epistemic_mode.value,
-                        }
-                    }
-        except Exception:
-            pass
     if not REG_OK or _eg is None:
         return None
     try:
