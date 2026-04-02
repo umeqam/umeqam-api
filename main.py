@@ -553,6 +553,33 @@ def _reg_fast_path(content: str, domain: str, t0: float):
                 }
         except Exception:
             pass
+    # R-ME semantic PASS: requires BOTH explicit safe keywords AND safe epistemic signals
+    # Prevents hedge words alone from making dangerous texts pass
+    if RME_OK and _rme:
+        try:
+            mv = _rme.extract(content)
+            safe_signal = mv.hedge_score + (1.0 - mv.certainty_score)
+            if safe_signal > 1.2 and mv.epistemic_mode.value in ("hedged", "uncertain", "neutral"):
+                text_lower = content.lower()
+                d = DOMAIN_SIGNALS.get(domain, {})
+                fail_keywords = d.get("fail", [])
+                pass_keywords = d.get("pass", [])
+                has_fail = any(p in text_lower for p in fail_keywords)
+                has_pass = any(p in text_lower for p in pass_keywords)
+                # CRITICAL: require BOTH no-fail AND explicit safe keywords
+                if not has_fail and has_pass:
+                    return {
+                        "overall_verdict":  "PASS",
+                        "compliance_score": 0.92,
+                        "judges_passed":    1,
+                        "judges_total":     1,
+                        "judges":           [],
+                        "flags":            [],
+                        "recommendation":   "PASS - safe epistemic + safe content signals",
+                        "engine":           "rme_semantic_pass",
+                    }
+        except Exception:
+            pass
     if not REG_OK or _eg is None:
         return None
     try:
