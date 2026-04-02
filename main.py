@@ -98,6 +98,16 @@ try:
     from umeqam_rme_v1 import MeaningExtractor
     _rme = MeaningExtractor()
     RME_OK = True
+
+# -- MiFID II ENGINE
+try:
+    sys.path.insert(0, os.path.join(BASE, "core"))
+    from umeqam_mifid_v1 import MiFIDComplianceEngine
+    _mifid = MiFIDComplianceEngine()
+    MIFID_OK = True
+except Exception:
+    _mifid = None
+    MIFID_OK = False
 except Exception:
     _rme = None
     RME_OK = False
@@ -733,6 +743,34 @@ async def legal_analyze(req: ComplianceRequest):
 @app.post("/v1/finance/analyze", tags=["Finance"], dependencies=[Depends(verify_api_key)])
 async def finance_analyze(req: ComplianceRequest):
     t0 = time.perf_counter()
+    # MiFID II regulatory engine — first layer
+    if MIFID_OK and _mifid:
+        try:
+            jurisdiction = req.jurisdiction or "EU"
+            mifid_result = _mifid.analyze(req.content, jurisdiction)
+            if mifid_result.verdict == "FAIL":
+                d = _mifid.to_dict(mifid_result)
+                return {
+                    "request_id":        str(uuid.uuid4()),
+                    "layer":             "finance",
+                    "overall_verdict":   "FAIL",
+                    "compliance_score":  d["compliance_score"],
+                    "judges_passed":     0,
+                    "judges_total":      1,
+                    "judges":            [],
+                    "flags":             [v["rule_id"] for v in d["violations"]],
+                    "recommendation":    d["recommendation"],
+                    "regulatory_exposure_eur": d["regulatory_exposure_eur"],
+                    "defensibility_score": d["defensibility_score"],
+                    "violations":        d["violations"],
+                    "audit_id":          d["audit_id"],
+                    "jurisdiction":      d["jurisdiction"],
+                    "timestamp":         d["timestamp"],
+                    "latency_ms":        round((time.perf_counter() - t0) * 1000, 1),
+                    "engine":            "mifid_ii_v1",
+                }
+        except Exception:
+            pass
     fast = _reg_fast_path(req.content, "finance", t0)
     if fast: return fast
     try:
