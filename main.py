@@ -1,4 +1,4 @@
-﻿"""
+"""
 UMEQAM REST API v2.2 (mental-fix + honest-benchmarks)
 Author: Ahmetyar Charyguliyev
 Models: GPT-4o + DeepSeek-chat
