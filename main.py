@@ -98,7 +98,9 @@ try:
     from umeqam_rme_v1 import MeaningExtractor
     _rme = MeaningExtractor()
     RME_OK = True
-
+except Exception:
+    _rme = None
+    RME_OK = False
 # -- MiFID II ENGINE
 try:
     sys.path.insert(0, os.path.join(BASE, "core"))
@@ -108,9 +110,6 @@ try:
 except Exception:
     _mifid = None
     MIFID_OK = False
-except Exception:
-    _rme = None
-    RME_OK = False
 
 # -- R-EG EPISTEMIC GUARDRAIL
 try:
