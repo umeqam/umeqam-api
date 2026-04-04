@@ -240,3 +240,27 @@ def full_analyze(req: FullModel):
     return {"status": "ok", "version": "2.0.0", "module": "UMEQAM FULL", **result}
 
 print("UMEQAM v2.0.0 — 5 endpoints loaded")
+
+# ─────────────────────────────────────────────
+# PIPELINE v1.0 — full integrated stack
+# ─────────────────────────────────────────────
+class PipelineModel(BaseModel):
+    content: str
+    domain: str = "general"
+    human_status: str = "available"
+
+@app.post("/v1/pipeline")
+def pipeline_analyze(req: PipelineModel):
+    print("=== PIPELINE ===", repr(req.content[:60]))
+    try:
+        import sys
+        sys.path.insert(0, os.getcwd())
+        from core.umeqam_pipeline import run_pipeline
+        result = run_pipeline(
+            content=req.content,
+            domain=req.domain,
+            human_status=req.human_status
+        )
+        return result
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
