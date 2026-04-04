@@ -40,7 +40,7 @@ def health():
             "/v1/rmethod",
             "/v1/signals",
             "/v1/divergent",
-            "/v1/full"
+            "/v1/full", "/v1/pipeline", "/v1/pipeline"
         ]
     }
 
@@ -173,7 +173,7 @@ def divergent_analyze(req: DivModel):
 # ─────────────────────────────────────────────
 # FULL — полный стек
 # ─────────────────────────────────────────────
-@app.post("/v1/full")
+@app.post("/v1/full", "/v1/pipeline", "/v1/pipeline")
 def full_analyze(req: FullModel):
     print("=== FULL PIPELINE ===", repr(req.content[:60]))
     result = {}
