@@ -1,4 +1,4 @@
-"""
+﻿"""
 UMEQAM REST API v2.5.7
 Author: Ahmetyar Charyguliyev
 Models: GPT-4o + DeepSeek-chat
@@ -736,7 +736,7 @@ class RegulatoryCheckResponse(BaseModel):
 
 @app.post("/v1/regulatory-check-v2", tags=["Regulatory"], response_model=RegulatoryCheckResponse, dependencies=[Depends(verify_api_key)])
 async def regulatory_check_v2(req: RegulatoryCheckRequest):
-    results = evaluate_all_regulators(req.text, regulators=req.regulators)
+    results = evaluate_all_regulators(req.text)
     blocked = [r for r, v in results.items() if v.get("verdict") == "BLOCK"]
     summary = f"BLOCKED by: {', '.join(blocked)}" if blocked else "PASS (all regulators)"
     return RegulatoryCheckResponse(
