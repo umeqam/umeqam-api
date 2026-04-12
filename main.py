@@ -738,7 +738,13 @@ class RegulatoryCheckResponse(BaseModel):
 async def regulatory_check_v2(req: RegulatoryCheckRequest):
     results = evaluate_all_regulators(req.text)
     blocked = [r for r, v in results.items() if v.get("verdict") == "BLOCK"]
-    summary = f"BLOCKED by: {', '.join(blocked)}" if blocked else "PASS (all regulators)"
+    review = [r for r, v in results.items() if v.get("verdict") == "REVIEW"]
+    parts = []
+    if blocked:
+        parts.append(f"BLOCKED by: {', '.join(blocked)}")
+    if review:
+        parts.append(f"REVIEW: {', '.join(review)}")
+    summary = " | ".join(parts) if parts else "PASS (all regulators)"
     return RegulatoryCheckResponse(
         text_evaluated=req.text,
         results=results,
