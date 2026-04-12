@@ -30,6 +30,7 @@ except ImportError:
 
 # ── REGULATORY ENGINES ────────────────────────────────────────
 from core.umeqam_regulatory_engines_v2 import evaluate_all_regulators
+from core.umeqam_mifid_v1 import MiFIDComplianceEngine
 import sys as _sys, os as _os
 _CORE = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "core")
 if _CORE not in _sys.path:
@@ -751,4 +752,16 @@ async def regulatory_check_v2(req: RegulatoryCheckRequest):
         timestamp=datetime.utcnow().isoformat() + "Z",
         verdict_summary=summary,
     )
+
+
+# -- MIFID II ENDPOINT --
+class MiFIDRequest(BaseModel):
+    text: str
+    jurisdiction: str = "EU"
+
+@app.post("/v1/mifid/analyze", tags=["Regulatory"], dependencies=[Depends(verify_api_key)])
+async def mifid_analyze(req: MiFIDRequest):
+    engine = MiFIDComplianceEngine()
+    result = engine.analyze(req.text, jurisdiction=req.jurisdiction)
+    return engine.to_dict(result)
 
