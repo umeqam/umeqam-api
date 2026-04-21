@@ -1,4 +1,4 @@
-﻿"""
+"""
 UMEQAM REST API v2.5.7
 Author: Ahmetyar Charyguliyev
 Models: GPT-4o + DeepSeek-chat
@@ -384,6 +384,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── SHIELD MOBILE ROUTER ──────────────────────────────────────
+try:
+    from shield_router import router as shield_router
+    app.include_router(shield_router)
+except Exception as _e:
+    print(f"[SHIELD] router not loaded: {_e}")
+
 # ── SCHEMAS ───────────────────────────────────────────────────
 class AskRequest(BaseModel):
     question: str = Field(..., example="Who is the current president of the USA?")
@@ -764,4 +771,3 @@ async def mifid_analyze(req: MiFIDRequest):
     engine = MiFIDComplianceEngine()
     result = engine.analyze(req.text, jurisdiction=req.jurisdiction)
     return engine.to_dict(result)
-
